@@ -1,16 +1,23 @@
 const CentralStation = require('./CentralStation');
+const debug = require('debug')('cs:server');
 
 const cs = new CentralStation({
   port: 3000,
   jwtSecret: 'your-secret-key',
-  usersFile: 'users.json',
+  usersFile: './data/users.json',
   modulesDir: 'modules'
 });
 
 cs.start().then(() => {
+  debug('CentralStation started');
   setInterval(() => {
     const time = new Date().toISOString();
-    cs.clients.forEach(hub => hub.username && hub.emit('timeUpdate', time));
+    cs.clients.forEach(hub => {
+      if (hub.username) {
+        hub.emit('timeUpdate', time);
+        debug(`Time update sent to ${hub.username}`);
+      }
+    });
   }, 1000);
 
   cs.wss.on('connection', (ws) => {
@@ -19,10 +26,10 @@ cs.start().then(() => {
       try {
         const { event, data } = JSON.parse(message);
         if (event === 'mouseMove' && hub) {
-          console.log(`Mouse moved for ${hub.username}: ${JSON.stringify(data)}`);
+          debug(`Mouse moved for ${hub.username}: ${JSON.stringify(data)}`);
         }
       } catch (error) {
-        console.error('Failed to process message:', error);
+        debug('Failed to process message:', error);
       }
     });
   });

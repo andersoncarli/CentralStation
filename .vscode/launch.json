@@ -40,7 +40,7 @@
       "program": "${file}",
       "env": {
         "TESTS": "1",
-        "DEBUG": "G core2 Test2 Exchange include",
+        "DEBUG": "cs:*",
         "NODE_NO_WARNINGS": "1"
       },
       // "args": [".", ".git",".vscode","node_modules","bin"],

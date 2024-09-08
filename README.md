@@ -70,7 +70,7 @@ const CentralStation = require('central-station');
 const cs = new CentralStation({
   port: 3000,
   jwtSecret: 'your-secret-key',
-  usersFile: 'path/to/users.json',
+  usersFile: './data/users.json',
   modulesDir: 'path/to/modules'
 });
 
