@@ -1,0 +1,164 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Core2",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "runtimeExecutable": "nodemon", // "runtimeExecutable": "${workspaceFolder}/node_modules/nodemon/bin/nodemon.js",
+      "program": "${workspaceFolder}/utils/core2.js",
+      "env": {
+        "DEBUG": "G core2 include",
+      },
+      // "args": ["timer","start","teste","0101"],
+      "skipFiles": [
+        "<node_internals>/**",
+        "${workspaceFolder}/libs/**/*.js",
+        // "${workspaceFolder}/utils/**/*.js",
+      ],
+      "runtimeArgs": [
+        "--use-strict",
+        // "--expose-gc",
+        "--trace-uncaught",
+        "--trace-warnings",
+        "-i",
+        "*.json",
+        "-I",
+        "-L",
+      ],
+      "restart": false,
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+    },
+    {
+      "name": "Current",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "runtimeExecutable": "nodemon", // "runtimeExecutable": "${workspaceFolder}/node_modules/nodemon/bin/nodemon.js",
+      "program": "${file}",
+      "env": {
+        "TESTS": "1",
+        "DEBUG": "G core2 Test2 Exchange include",
+        "NODE_NO_WARNINGS": "1"
+      },
+      // "args": [".", ".git",".vscode","node_modules","bin"],
+      "runtimeArgs": [
+        "--use-strict",
+        "-i",
+        "*.json",
+        "-I"
+      ],
+      "restart": true,
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "skipFiles": [
+        "<node_internals>/**/*",
+        "${workspaceFolder}/node_modules/**",
+        "${workspaceFolder}/utils/**/*.js",
+        "${workspaceFolder}/libs/**/*.js",
+      ],
+    },
+    {
+      "type": "chrome",
+      "request": "attach",
+      "name": "Attach to Chrome",
+      "port": 9222,
+      "webRoot": "${workspaceFolder}",
+      "internalConsoleOptions": "openOnSessionStart",
+      "smartStep": true
+    },
+    {
+      "name": "NPM Launch",
+      "type": "node",
+      "request": "launch",
+      // "stopOnEntry": true,
+      // "args": ["."],
+      "program": "${workspaceFolder}/main.dev.js",
+      "cwd": "${workspaceFolder}",
+      "runtimeExecutable": "/a/.npm-global/bin/npm",
+      // "restart": true,
+      "runtimeArgs": [
+        "run",
+        "nodemon"
+      ],
+      "port": 9229,
+      "trace": true
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Node Current File",
+      // "console": "externalTerminal",
+      "args": [
+        ".",
+        ".git",
+        ".vscode",
+        "node_modules",
+        "bin"
+      ],
+      "env": {
+        "TESTS": "1",
+        "DEBUG": "*",
+        "NODE_NO_WARNINGS": "1"
+      },
+      "console": "integratedTerminal",
+      "program": "${file}",
+      "skipFiles": [
+        "<node_internals>/**/*.js",
+        "${workspaceFolder}/node_modules/**/*.js",
+        "${workspaceFolder}/utils/include.js",
+        "${workspaceFolder}/utils/Call.js",
+        "${workspaceFolder}/utils/obj.js",
+        "${workspaceFolder}/utils/is.js",
+        "${workspaceFolder}/utils/test.js",
+        "${workspaceFolder}/utils/promise.js",
+        "${workspaceFolder}/utils/math.js",
+        "${workspaceFolder}/utils/myarray.js",
+        "${workspaceFolder}/utils/events.js",
+        "${workspaceFolder}/utils/log.js",
+        "${workspaceFolder}/utils/emitter.js",
+      ]
+    },
+    {
+      "name": "Electron: Main",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/electron",
+      "runtimeArgs": [
+        "--remote-debugging-port=9223",
+        "."
+      ],
+      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}/src/play.js",
+      "skipFiles": [
+        "<node_internals>/**/*.js"
+      ],
+      "autoAttachChildProcesses": true
+    },
+    {
+      "type": "chrome",
+      "request": "launch",
+      "name": "Launch Chrome against localhost",
+      // "runtimeExecutable": "/usr/bin/chromium-browser",
+      "runtimeExecutable": "/usr/bin/brave-browser",
+      "runtimeArgs": [
+        "--remote-debugging-port=9222",
+        "--allow-file-access-from-files",
+        // "--disable-features=AutoplayIgnoreWebAudio"
+      ],
+      "url": "file://${file}", // without a server
+      // "url": "file://${workspaceFolder}/${fileBasename}", // without a server
+      // "url": "http://localhost:5500/pages/tftraining.html",
+      // "url": "http://localhost:5500/${fileBasename}",
+      "port": 9222,
+      "trace": true,
+      "skipFiles": [
+        "<node_internals>/**/*.js"
+      ],
+      "cwd": "${workspaceFolder}",
+      "webRoot": "${workspaceFolder}"
+    }
+  ]
+}

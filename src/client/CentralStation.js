@@ -1,6 +1,8 @@
+// client/CentralStation.js
 class CentralStation {
-  constructor() {
-    this.ws = new WebSocket('ws://localhost:3000');
+  constructor(options = {}) {
+    this.options = { url: 'ws://localhost:3000', ...options };
+    this.ws = new WebSocket(this.options.url);
     this.clientId = null;
     this.eventHandlers = {};
     this.moduleCache = new Map();
