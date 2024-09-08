@@ -5,41 +5,54 @@ const http = require('http');
 const fs = require('fs').promises;
 const path = require('path');
 const debug = require('debug')('cs:server');
+const nodeFlags = require('node-flags');
+const DB = require('./db/DB');
+const { connectToDatabase } = require('./database');
+const logger = require('./logger');
 
 class CentralStation {
   constructor(options = {}) {
-    this.options = { port: 3000, jwtSecret: 'your-secret-key', usersFile: './data/users.json', modulesDir: 'modules', ...options };
+    this.options = {
+      port: 3000,
+      jwtSecret: 'your-secret-key',
+      dbOptions: { type: 'json', url: './data' },
+      modulesDir: 'modules',
+      ...options
+    };
     this.clients = new Map();
     this.modules = new Map();
+    this.routes = new Map();
+    this.eventHandlers = new Map();
+    this.middleware = [];
     this.wss = null;
+    this.userStates = new Map();
+    this.db = new DB(options.dbOptions);
     debug('CentralStation instance created with options:', this.options);
   }
 
   async start() {
     debug('Starting CentralStation');
-    await this.ensureUsersFile();
+    await connectToDatabase();
+    // await this.ensureUsersFile();
     await this.loadAllModules();
     this.server = http.createServer(this.handleHttpRequest.bind(this));
     this.wss = new WebSocket.Server({ server: this.server });
     this.wss.on('connection', this.handleWebSocketConnection.bind(this));
+
+    await this.db.connect();
+
+    // Add basic middleware
+    this.use(require('./middleware/auth'));
+    this.use(require('./middleware/i18n'));
+    this.use(require('./middleware/theme'));
+    this.use(require('./middleware/css'));
+
     await this.server.listen(this.options.port);
     debug(`CentralStation running on http://localhost:${this.options.port}`);
   }
 
-  async ensureUsersFile() {
-    debug('Ensuring users file exists');
-    try {
-      await fs.access(this.options.usersFile);
-      debug('Users file found');
-    } catch (error) {
-      if (error.code === 'ENOENT') {
-        debug('Users file not found, creating new one');
-        await fs.writeFile(this.options.usersFile, JSON.stringify([], null, 2));
-        debug('Users file created');
-      } else {
-        throw error;
-      }
-    }
+  use(middleware) {
+    this.middleware.push(middleware);
   }
 
   async loadAllModules() {
@@ -54,23 +67,35 @@ class CentralStation {
     debug('All modules loaded');
   }
 
-  async handleHttpRequest(req, res) {
-    debug(`HTTP request received: ${req.url}`);
-    let filePath;
-    if (req.url === '/' || req.url === '/signup' || req.url === '/login') {
-      filePath = path.join(__dirname, '../client/index.html');
-    } else {
-      filePath = path.join(__dirname, '../client', req.url);
+  async applyMiddleware(content, context) {
+    for (const middleware of this.middleware) {
+      const handler = await middleware(context);
+      content = await handler(content);
     }
+    return content;
+  }
+
+  handleError(error, req, res) {
+    logger.error('An error occurred', { error: error.message, stack: error.stack });
+    res.writeHead(500, { 'Content-Type': 'text/plain' });
+    res.end('Internal Server Error');
+  }
+
+  async handleHttpRequest(req, res) {
     try {
-      const data = await fs.readFile(filePath, 'utf8');
-      const contentType = filePath.endsWith('.js') ? 'application/javascript' : 'text/html';
-      res.writeHead(200, { 'Content-Type': contentType });
-      res.end(data);
-      debug(`Served file: ${filePath}`);
+      debug(`HTTP request received: ${req.url}`);
+      const route = this.routes.get(req.url);
+      if (route) {
+        const context = { req, res };
+        let content = await route(req, res, context);
+        content = await this.applyMiddleware(content, context);
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end(content);
+      } else {
+        // ... (keep existing static file serving logic)
+      }
     } catch (error) {
-      debug(`File not found: ${filePath}`);
-      res.writeHead(404).end('Not Found');
+      this.handleError(error, req, res);
     }
   }
 

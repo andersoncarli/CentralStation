@@ -25,6 +25,7 @@ class CentralStation {
 
     this.on('module', this.handleModuleResponse.bind(this));
     this.on('authSuccess', this.handleAuthSuccess.bind(this));
+    this.on('stateUpdated', this.handleStateUpdated.bind(this));
   }
 
   emit(event, data) {
@@ -72,6 +73,13 @@ class CentralStation {
     this.token = data.token;
   }
 
+  handleStateUpdated(state) {
+    localStorage.setItem('userState', JSON.stringify(state));
+    if (this.eventHandlers['stateUpdated']) {
+      this.eventHandlers['stateUpdated'](state);
+    }
+  }
+
   login(username, password) {
     this.emit('auth', { username, password });
   }
@@ -84,6 +92,10 @@ class CentralStation {
     localStorage.removeItem('authToken');
     this.token = null;
     this.emit('logout');
+  }
+
+  updateState(state) {
+    this.emit('state', { username: localStorage.getItem('username'), state });
   }
 }
 

@@ -1,57 +1,118 @@
-const cs = new CentralStation({ url: 'ws://localhost:3000' });
-const $ = document.querySelector.bind(document);
+import '../../src/client/utils.js';
 
-const Header = () => `
-  <header class="bg-gray-100 dark:bg-gray-800 py-4">
-    <nav class="container mx-auto flex justify-between items-center px-4">
-      <a href="#" class="text-2xl font-bold">My Blog</a>
-      <div class="flex items-center space-x-4">
-        <a href="#">Home</a>
-        <a href="#">Blog</a>
-        <select class="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-2 py-1">
-          <option value="en">English</option>
-          <option value="es">Español</option>
-        </select>
-        <button class="p-2 bg-gray-200 dark:bg-gray-700 rounded-full">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m8.66-8.66h-1M4.34 12H3m15.66 4.34l-.7-.7m-11.32 0l-.7.7m11.32-11.32l-.7.7m-11.32 0l-.7-.7M12 5a7 7 0 100 14 7 7 0 000-14z"></path>
-          </svg>
-        </button>
-      </div>
-    </nav>
-  </header>
-`;
+const cs = new CentralStation();
 
-const Blog = (posts) => `
-  <div>
-    ${Header()}
-    <h1>Blog</h1>
-    ${posts.map(post => `
-      <div>
-        <h2>${post.title}</h2>
-        <p>${post.content}</p>
-      </div>
-    `).join('')}
-  </div>
-`;
+let currentState = JSON.parse(localStorage.getItem('userState')) || { lang: 'en', theme: 'light' };
 
-const App = async () => {
-  let posts = [];
-  const render = () => {
-    $('body').innerHTML = Blog(posts);
-  };
+cs.on({
+  'blogPosts': (data) => {
+    const blogList = $('blog-list');
+    if (blogList) {
+      blogList.setAttribute('posts', JSON.stringify(data));
+    }
+  },
+  'blogPost': (data) => {
+    const blogPost = $('blog-post');
+    if (blogPost) {
+      blogPost.setAttribute('post', JSON.stringify(data));
+    }
+  },
+  'newComment': (data) => {
+    // Handle new comment (e.g., update UI or fetch updated post)
+  },
+  'loginSuccess': ({ token }) => {
+    localStorage.setItem('authToken', token);
+    window.location.href = '/dashboard';
+  },
+  'loginError': (message) => {
+    alert(message);
+  },
+  'signupSuccess': ({ token }) => {
+    localStorage.setItem('authToken', token);
+    window.location.href = '/dashboard';
+  },
+  'signupError': (message) => {
+    alert(message);
+  },
+  'stateUpdated': (state) => {
+    currentState = state;
+    applyState(state);
+  }
+});
 
-  cs.on('blogPosts', (data) => {
-    posts = data;
-    render();
-  });
-
-  cs.emit('getBlogPosts');
-  render();
-};
-
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', App);
-} else {
-  App();
+function applyState(state) {
+  if (state.lang !== currentState.lang) {
+    window.location.reload();
+  }
+  if (state.theme !== currentState.theme) {
+    setTheme(state.theme);
+  }
 }
+
+// Fetch initial data if needed
+if ($('blog-list')) {
+  cs.emit('getBlogPosts');
+}
+
+const postId = new URLSearchParams(window.location.search).get('id');
+if (postId && $('blog-post')) {
+  cs.emit('getBlogPost', { id: postId });
+}
+
+// Handle login form submission
+const loginForm = $('login-form');
+if (loginForm) {
+  loginForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const username = loginForm.querySelector('#username').value;
+    const password = loginForm.querySelector('#password').value;
+    cs.login(username, password);
+  });
+}
+
+// Handle signup form submission
+const signupForm = $('signup-form');
+if (signupForm) {
+  signupForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const username = signupForm.querySelector('#username').value;
+    const password = signupForm.querySelector('#password').value;
+    cs.signup(username, password);
+  });
+}
+
+// Language change handling
+const langSelect = $('#language-select');
+if (langSelect) {
+  langSelect.value = currentState.lang;
+  langSelect.addEventListener('change', (e) => {
+    currentState.lang = e.target.value;
+    cs.updateState(currentState);
+  });
+}
+
+// Theme toggle
+const themeToggle = $('#theme-toggle');
+if (themeToggle) {
+  themeToggle.addEventListener('click', () => {
+    currentState.theme = currentState.theme === 'light' ? 'dark' : 'light';
+    cs.updateState(currentState);
+  });
+}
+
+// Load flag images
+$$('select option').forEach(option => {
+  const lang = option.value;
+  cs.emit('require', { path: `/flags/${lang}.svg` });
+});
+
+cs.on('flag', ({ path, data }) => {
+  const lang = path.split('/').pop().split('.')[0];
+  const option = $(`option[value="${lang}"]`);
+  option.style.backgroundImage = `url(data:image/svg+xml;base64,${data})`;
+  option.style.backgroundRepeat = 'no-repeat';
+  option.style.backgroundPosition = 'left center';
+  option.style.paddingLeft = '25px';
+});
+
+cs.start();
