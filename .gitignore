@@ -2,3 +2,4 @@ node_modules
 _/
 _*.*_
 _*.*
+package-lock.json

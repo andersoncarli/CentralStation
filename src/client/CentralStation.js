@@ -144,6 +144,19 @@ class CentralStation {
       console.error('Route not found:', path);
     }
   }
+
+  registerComponent(name, component) {
+    this.components[name] = component;
+  }
+
+  renderComponent(name, props = {}) {
+    const Component = this.components[name];
+    if (!Component) {
+      console.error(`Component ${name} not found`);
+      return;
+    }
+    preact.render(preact.h(Component, props), document.getElementById('app'));
+  }
 }
 
 const cs = new CentralStation();

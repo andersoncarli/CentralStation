@@ -15,15 +15,17 @@
   "bugs": {
     "url": "https://github.com/andersoncarli/central-station/issues"
   },
-  "keywords": ["websocket", "communication", "client-server"],
+  "keywords": [
+    "websocket",
+    "communication",
+    "client-server"
+  ],
   "author": "Anderson Carli",
   "license": "MIT",
   "dependencies": {
-    "ws": "^8.13.0",
-    "jsonwebtoken": "^9.0.0"
-  },
-  "devDependencies": {
-    "jest": "^26.0.0"
+    "jest": "^29.7.0",
+    "jsonwebtoken": "^9.0.0",
+    "ws": "^8.13.0"
   },
   "peerDependencies": {
     "crypto": "^1.0.1"

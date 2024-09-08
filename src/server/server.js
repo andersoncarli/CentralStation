@@ -30,25 +30,36 @@ async function loadModule(moduleName) {
 
 async function loadAllModules() {
   const modulesDir = path.join(__dirname, 'modules');
-  const files = await fs.readdir(modulesDir);
-  for (const file of files) {
-    if (file.endsWith('.js')) {
-      const moduleName = path.basename(file, '.js');
-      await loadModule(moduleName);
+  try {
+    const files = await fs.readdir(modulesDir);
+    for (const file of files) {
+      if (file.endsWith('.js')) {
+        const moduleName = path.basename(file, '.js');
+        await loadModule(moduleName);
+      }
+    }
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      console.warn('Modules directory not found. Skipping module loading.');
+    } else {
+      throw error;
     }
   }
 }
 
 const server = http.createServer(async (req, res) => {
   if (req.url === '/central-station.js') {
-    try {
-      const data = await fs.readFile('hub.js', 'utf8');
-      res.writeHead(200, { 'Content-Type': 'application/javascript' });
-      res.end(data);
-    } catch (err) {
-      res.writeHead(500);
-      res.end('Error loading Hub.js');
-    }
+    const data = await fs.readFile(path.join(__dirname, '../client/CentralStation.js'), 'utf8');
+    res.writeHead(200, { 'Content-Type': 'application/javascript' });
+    res.end(data);
+  } else if (req.url === '/app.js') {
+    const data = await fs.readFile(path.join(__dirname, '../client/app.js'), 'utf8');
+    res.writeHead(200, { 'Content-Type': 'application/javascript' });
+    res.end(data);
+  } else if (req.url === '/') {
+    const data = await fs.readFile(path.join(__dirname, '../client/index.html'), 'utf8');
+    res.writeHead(200, { 'Content-Type': 'text/html' });
+    res.end(data);
   } else {
     res.writeHead(404);
     res.end('Not Found');
