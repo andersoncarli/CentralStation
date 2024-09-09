@@ -34,6 +34,7 @@
     "node-flags": "^0.1.9",
     "postcss": "^8.4.45",
     "tailwindcss": "^3.4.10",
+    "winston": "^3.14.2",
     "ws": "^8.13.0"
   },
   "peerDependencies": {

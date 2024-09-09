@@ -7,7 +7,6 @@ const path = require('path');
 const debug = require('debug')('cs:server');
 const nodeFlags = require('node-flags');
 const DB = require('./db/DB');
-const { connectToDatabase } = require('./database');
 const logger = require('./logger');
 
 class CentralStation {
@@ -32,8 +31,6 @@ class CentralStation {
 
   async start() {
     debug('Starting CentralStation');
-    await connectToDatabase();
-    // await this.ensureUsersFile();
     await this.loadAllModules();
     this.server = http.createServer(this.handleHttpRequest.bind(this));
     this.wss = new WebSocket.Server({ server: this.server });

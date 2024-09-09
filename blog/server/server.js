@@ -4,7 +4,7 @@ const debug = require('debug')('cs:server');
 const cs = new CentralStation({
   port: 3000,
   jwtSecret: 'your-secret-key',
-  usersFile: './data/users.json',
+  dbOptions: { type: 'json', dataDir: './data' },
   modulesDir: 'modules'
 });
 

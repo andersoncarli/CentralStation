@@ -4,3 +4,4 @@ _/
 _*.*_
 _*.*
 package-lock.json
+*.log
