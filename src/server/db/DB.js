@@ -1,7 +1,7 @@
 const DBJson = require('./dbjson');
 const DBMongo = require('./dbmongo');
 
-function DB(type = 'default', options) {
+function DB({ type = 'default', ...options }) {
   let driver = {
     'json': () => new DBJson(options),
     'mongo': () => new DBMongo(options),

@@ -3,6 +3,9 @@ import tailwindcss from 'tailwindcss';
 import autoprefixer from 'autoprefixer';
 import cssnano from 'cssnano';
 import fs from 'fs/promises';
+import { renderToString } from 'react-dom/server';
+import { hydrate } from 'react-dom';
+import React from 'react';
 
 // Add this function to process CSS
 async function processCss(css, classes) {
@@ -29,52 +32,134 @@ cs.on('require', async (client, { path }) => {
     const flagPath = `./node_modules/node-flags/flags${path}`;
     const flag = await fs.readFile(flagPath);
     client.emit('flag', { path, data: flag.toString('base64') });
+  } else if (path === '/api/blogpost') {
+    const post = await fetchBlogPost(); // Implement this function
+    client.emit('blogpost', post);
   } else {
     // Handle other file types...
   }
 });
 
-export function component(name, renderFunc) {
-  // Add a method to extract classes from the component
-  customElements.define(name, class extends HTMLElement {
-    constructor() {
-      super();
-      this.attachShadow({ mode: 'open' });
-    }
+function soml(...args) {
+  const extract = (arr, type) => arr.find(arg => typeof arg === type);
+  const tag = extract(args, 'string') || 'div';
+  const props = extract(args, 'object') || {};
+  const children = extract(args, 'function') || (() => extract(args, 'array') || []);
 
-    connectedCallback() {
-      this.render();
-    }
+  const element = { $: tag, _: props, '': children };
 
-    attributeChangedCallback() {
-      this.render();
-    }
-
-    render() {
-      this.shadowRoot.innerHTML = renderFunc.call(this);
-    }
-
-    static get observedAttributes() {
-      return ['posts', 'post'];
-    }
-
-    static extractClasses() {
-      const tempElement = document.createElement('div');
-      tempElement.innerHTML = renderFunc.call(tempElement);
-      return Array.from(tempElement.querySelectorAll('*'))
-        .flatMap(el => el.className.split(' '))
-        .filter(Boolean);
+  return new Proxy(element, {
+    get(target, prop) {
+      if (prop === 'toArray') {
+        return () => [tag, props, children];
+      }
+      if (prop === 'toObject') {
+        return () => ({ [tag]: { ...props, children: children() } });
+      }
+      return target[prop];
     }
   });
-
-  return renderFunc;
 }
 
-// Function to extract classes from all components
+soml.plugins = {};
+
+soml.plugin = (name, to, from, opts = {}) => {
+  soml.plugins[name] = { to, from, opts };
+  soml[`to${name.charAt(0).toUpperCase() + name.slice(1)}`] = (element) => to(element, opts);
+  soml[`from${name.charAt(0).toUpperCase() + name.slice(1)}`] = (data) => from(data, opts);
+};
+
+// Example usage
+const Button = soml('Button', { onClick: () => alert('Clicked!') }, () => ['Click me']);
+
+const App = soml('App', () => ({
+  div: {
+    h1: 'Hello, World!',
+    Button: { text: 'Click me', onClick: () => alert('Clicked!') }
+  }
+}));
+
+// HTML Plugin
+soml.plugin('html',
+  (element, opts = {}) => {
+    const { $: tag, _: props, '': children } = element;
+    const attrs = Object.entries(props)
+      .map(([key, value]) => `${key}="${value}"`)
+      .join(' ');
+    const childrenHtml = (typeof children === 'function' ? children() : children)
+      .map(child => soml.toHtml(child))
+      .join('');
+    return `<${tag} ${attrs}>${childrenHtml}</${tag}>`;
+  },
+  (htmlString, opts = {}) => {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlString, 'text/html');
+    const domToSoml = (node) => {
+      if (node.nodeType === Node.TEXT_NODE) return node.textContent;
+      const tag = node.tagName.toLowerCase();
+      const props = {};
+      Array.from(node.attributes).forEach(attr => {
+        props[attr.name] = attr.value;
+      });
+      const children = Array.from(node.childNodes).map(domToSoml);
+      return soml(tag, props, children);
+    };
+    return domToSoml(doc.body.firstChild);
+  }
+);
+
+// DOM Plugin
+soml.plugin('dom',
+  (element, opts = { document: window.document }) => {
+    const { $: tag, _: props, '': children } = element;
+    const el = opts.document.createElement(tag);
+    Object.entries(props).forEach(([key, value]) => {
+      if (key.startsWith('on') && typeof value === 'function') {
+        el.addEventListener(key.slice(2).toLowerCase(), value);
+      } else {
+        el.setAttribute(key, value);
+      }
+    });
+    (typeof children === 'function' ? children() : children).forEach(child => {
+      el.appendChild(typeof child === 'string' ? opts.document.createTextNode(child) : soml.toDom(child, opts));
+    });
+    return el;
+  },
+  (domElement, opts = {}) => {
+    if (domElement.nodeType === Node.TEXT_NODE) return domElement.textContent;
+    const tag = domElement.tagName.toLowerCase();
+    const props = {};
+    Array.from(domElement.attributes).forEach(attr => {
+      props[attr.name] = attr.value;
+    });
+    const children = Array.from(domElement.childNodes).map(node => soml.fromDom(node, opts));
+    return soml(tag, props, children);
+  }
+);
+
+// JSON Plugin
+soml.plugin('json',
+  (element, opts = {}) => JSON.stringify(element.toObject()),
+  (jsonString, opts = {}) => {
+    const obj = JSON.parse(jsonString);
+    const [tag, props, children] = Object.entries(obj)[0];
+    return soml(tag, props, children);
+  }
+);
+
+// Update extractClassesFromComponents function
 function extractClassesFromComponents() {
-  return Object.values(customElements.get)
-    .filter(el => el.extractClasses)
-    .flatMap(el => el.extractClasses());
+  const extractClasses = (element) => {
+    if (typeof element !== 'object') return [];
+    const { _: props = {}, '': children = [] } = element;
+    const classNames = props.class ? props.class.split(' ') : [];
+    return [
+      ...classNames,
+      ...(typeof children === 'function' ? children() : children).flatMap(extractClasses)
+    ];
+  };
+
+  return Object.values(soml.components || {}).flatMap(extractClasses);
 }
 
 // Add theme and i18n handling

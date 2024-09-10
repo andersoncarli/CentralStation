@@ -1,8 +1,8 @@
-import jwt from 'jsonwebtoken';
+const jwt = require('jsonwebtoken');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
-export async function handleAuth(req) {
+async function handleAuth(req) {
   const token = req.headers['authorization'];
   if (!token) return null;
 
@@ -14,6 +14,7 @@ export async function handleAuth(req) {
   }
 }
 
-export function generateToken(user) {
+function generateToken(user) {
   return jwt.sign({ id: user.id, username: user.username }, JWT_SECRET);
 }
+module.exports = { handleAuth, generateToken };

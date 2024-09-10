@@ -5,51 +5,46 @@ const http = require('http');
 const fs = require('fs').promises;
 const path = require('path');
 const debug = require('debug')('cs:server');
-const nodeFlags = require('node-flags');
-const DB = require('./db/DB');
-const logger = require('./logger');
+const postcss = require('postcss');
+const tailwindcss = require('tailwindcss');
 
 class CentralStation {
   constructor(options = {}) {
-    this.options = {
-      port: 3000,
-      jwtSecret: 'your-secret-key',
-      dbOptions: { type: 'json', url: './data' },
-      modulesDir: 'modules',
-      ...options
-    };
+    this.options = { port: 3000, jwtSecret: 'your-secret-key', usersFile: './data/users.json', modulesDir: 'modules', ...options };
     this.clients = new Map();
     this.modules = new Map();
-    this.routes = new Map();
-    this.eventHandlers = new Map();
     this.middleware = [];
     this.wss = null;
-    this.userStates = new Map();
-    this.db = new DB(options.dbOptions);
     debug('CentralStation instance created with options:', this.options);
   }
 
   async start() {
     debug('Starting CentralStation');
+    await this.ensureUsersFile();
     await this.loadAllModules();
+    await this.compileTailwindCSS();
+    await this.loadMiddleware();
     this.server = http.createServer(this.handleHttpRequest.bind(this));
     this.wss = new WebSocket.Server({ server: this.server });
     this.wss.on('connection', this.handleWebSocketConnection.bind(this));
-
-    await this.db.connect();
-
-    // Add basic middleware
-    this.use(require('./middleware/auth'));
-    this.use(require('./middleware/i18n'));
-    this.use(require('./middleware/theme'));
-    this.use(require('./middleware/css'));
-
     await this.server.listen(this.options.port);
     debug(`CentralStation running on http://localhost:${this.options.port}`);
   }
 
-  use(middleware) {
-    this.middleware.push(middleware);
+  async ensureUsersFile() {
+    debug('Ensuring users file exists');
+    try {
+      await fs.access(this.options.usersFile);
+      debug('Users file found');
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        debug('Users file not found, creating new one');
+        await fs.writeFile(this.options.usersFile, JSON.stringify([], null, 2));
+        debug('Users file created');
+      } else {
+        throw error;
+      }
+    }
   }
 
   async loadAllModules() {
@@ -64,6 +59,29 @@ class CentralStation {
     debug('All modules loaded');
   }
 
+  async compileTailwindCSS() {
+    debug('Compiling Tailwind CSS');
+    const css = '@tailwind base; @tailwind components; @tailwind utilities;';
+    const result = await postcss([tailwindcss]).process(css, { from: undefined });
+    await fs.writeFile(path.join(__dirname, '../../public/styles.css'), result.css);
+    debug('Tailwind CSS compiled');
+  }
+
+  async loadMiddleware() {
+    debug('Loading middleware');
+    const middlewareDir = path.join(__dirname, 'middleware');
+    const files = await fs.readdir(middlewareDir);
+    for (const file of files.filter(f => f.endsWith('.js'))) {
+      const middleware = require(path.join(middlewareDir, file));
+      this.use(middleware);
+      debug(`Loaded middleware: ${file}`);
+    }
+  }
+
+  use(middleware) {
+    this.middleware.push(middleware);
+  }
+
   async applyMiddleware(content, context) {
     for (const middleware of this.middleware) {
       const handler = await middleware(context);
@@ -72,27 +90,23 @@ class CentralStation {
     return content;
   }
 
-  handleError(error, req, res) {
-    logger.error('An error occurred', { error: error.message, stack: error.stack });
-    res.writeHead(500, { 'Content-Type': 'text/plain' });
-    res.end('Internal Server Error');
-  }
-
   async handleHttpRequest(req, res) {
+    debug(`HTTP request received: ${req.url}`);
+    let filePath;
+    if (req.url === '/' || req.url === '/signup' || req.url === '/login') {
+      filePath = path.join(__dirname, '../client/index.html');
+    } else {
+      filePath = path.join(__dirname, '../client', req.url);
+    }
     try {
-      debug(`HTTP request received: ${req.url}`);
-      const route = this.routes.get(req.url);
-      if (route) {
-        const context = { req, res };
-        let content = await route(req, res, context);
-        content = await this.applyMiddleware(content, context);
-        res.writeHead(200, { 'Content-Type': 'text/html' });
-        res.end(content);
-      } else {
-        // ... (keep existing static file serving logic)
-      }
+      const data = await fs.readFile(filePath, 'utf8');
+      const contentType = filePath.endsWith('.js') ? 'application/javascript' : 'text/html';
+      res.writeHead(200, { 'Content-Type': contentType });
+      res.end(data);
+      debug(`Served file: ${filePath}`);
     } catch (error) {
-      this.handleError(error, req, res);
+      debug(`File not found: ${filePath}`);
+      res.writeHead(404).end('Not Found');
     }
   }
 
@@ -102,62 +116,21 @@ class CentralStation {
     const hub = this.createClientHub(ws, clientId);
     this.clients.set(clientId, hub);
 
-    hub.on('auth', async ({ username, password }) => {
-      debug(`Auth attempt for user: ${username}`);
-      const users = JSON.parse(await fs.readFile(this.options.usersFile, 'utf8'));
-      const user = users.find(u => u.username === username && u.passwordHash === this.hashPassword(password));
-      if (user) {
-        hub.username = username;
-        hub.emit('authStateChange', true);
-        hub.emit('authSuccess', { username, token: jwt.sign({ username }, this.options.jwtSecret, { expiresIn: '1h' }) });
-        debug(`Auth successful for user: ${username}`);
-      } else {
-        hub.emit('authError', { message: 'Invalid credentials' });
-        debug(`Auth failed for user: ${username}`);
-      }
-    });
-
-    hub.on('signup', async ({ username, password }) => {
-      debug(`Signup attempt for user: ${username}`);
-      const users = JSON.parse(await fs.readFile(this.options.usersFile, 'utf8'));
-      if (users.some(u => u.username === username)) {
-        hub.emit('signupError', { message: 'Username already exists' });
-        debug(`Signup failed: Username ${username} already exists`);
-      } else {
-        users.push({ username, passwordHash: this.hashPassword(password) });
-        await fs.writeFile(this.options.usersFile, JSON.stringify(users, null, 2));
-        hub.emit('signupSuccess');
-        debug(`Signup successful for user: ${username}`);
-      }
-    });
-
-    hub.on('logout', () => {
-      debug(`Logout for user: ${hub.username}`);
-      hub.username = null;
-      hub.emit('authStateChange', false);
-    });
-
-    hub.on('require', ({ moduleName, hash }) => {
-      debug(`Module required: ${moduleName}`);
-      const module = this.modules.get(moduleName);
-      if (!module) {
-        hub.emit('error', { message: `Module not found: ${moduleName}` });
-        debug(`Module not found: ${moduleName}`);
-      } else if (module.hash !== hash) {
-        hub.emit('module', { name: moduleName, content: module.content, hash: module.hash });
-        debug(`Module ${moduleName} sent to client`);
-      } else {
-        hub.emit('module', { name: moduleName, upToDate: true });
-        debug(`Module ${moduleName} is up to date`);
-      }
-    });
-
-    hub.on('mouseMove', (position) => {
-      debug(`Mouse moved for ${hub.username}: ${JSON.stringify(position)}`);
+    hub.on('getBlogPosts', async () => {
+      const posts = await this.getBlogPosts();
+      hub.emit('blogPosts', posts);
     });
 
     hub.emit('init', { clientId });
     debug(`Sent init event to client: ${clientId}`);
+  }
+
+  async getBlogPosts() {
+    // Simulate fetching blog posts from a database
+    return [
+      { title: 'First Post', content: 'This is the content of the first post.' },
+      { title: 'Second Post', content: 'This is the content of the second post.' }
+    ];
   }
 
   createClientHub(ws, clientId) {
@@ -181,10 +154,6 @@ class CentralStation {
         });
       }
     };
-  }
-
-  hashPassword(password) {
-    return crypto.createHash('sha256').update(password).digest('hex');
   }
 }
 

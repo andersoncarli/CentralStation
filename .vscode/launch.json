@@ -2,12 +2,12 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Core2",
+      "name": "CS Server",
       "type": "node",
       "request": "launch",
       "cwd": "${workspaceFolder}",
       "runtimeExecutable": "nodemon", // "runtimeExecutable": "${workspaceFolder}/node_modules/nodemon/bin/nodemon.js",
-      "program": "${workspaceFolder}/utils/core2.js",
+      "program": "${workspaceFolder}/src/server/server.js",
       "env": {
         "DEBUG": "G core2 include",
       },
